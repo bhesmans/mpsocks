@@ -1,0 +1,120 @@
+#!/bin/bash
+
+IMG=${IMG:-"mpsocks.img"}
+DIR="mount_${IMG}"
+
+build_image() {
+	qemu-img create $IMG 10g
+	mkfs.ext3 $IMG
+	mkdir $DIR
+	sudo mount -o loop $IMG $DIR
+
+	git clone https://salsa.debian.org/installer-team/debootstrap.git
+	sudo DEBOOTSTRAP_DIR=$(pwd)/debootstrap ./debootstrap/debootstrap --arch amd64 stretch $DIR
+
+	sudo chroot $DIR passwd root
+
+	# auto up our mgmt interface
+	#TODO check EOF when rerun, due to align change
+	sudo bash -c "grep -q enp0s3 $DIR/etc/network/interfaces || 
+	cat >> $DIR/etc/network/interfaces <<EOF
+
+auto enp0s3
+allow-hotplug enp0s3
+iface enp0s3 inet dhcp
+EOF"
+
+	# install SSH and our key.
+
+	sudo chroot $DIR apt-get install -y openssh-server --allow-unauthenticated
+	sudo mkdir $DIR/root/.ssh
+	sudo chmod 700 $DIR/root/.ssh
+	sudo bash -c "cat $HOME/.ssh/id_rsa.pub >> $DIR/root/.ssh/authorized_keys"
+	sudo chmod 600 $DIR/root/.ssh/authorized_keys
+
+	# TODO integrate this, i did this to cancel the default route learn over dhcp for mgmt
+	# we won't use it.
+	# cat /etc/dhcp/dhclient-exit-hooks.d/drop_default
+	# if [ "${reason}" = "BOUND" -a "${interface}" = "enp0s3" ] ; then
+	#         if [ "$(ip r | grep default | awk '{print $3}')" = "${new_routers}" ] ; then
+	#                 ip route del default
+	#         fi
+	# fi
+	sudo umount $DIR
+	rmdir $DIR
+}
+
+build_kernel() {
+	git clone https://github.com/multipath-tcp/mptcp.git
+	cd mptcp
+	make O=build-kvm x86_64_defconfig
+	make O=build-kvm kvmconfig
+
+	scripts/config --file build-kvm/.config --enable MPTCP
+	scripts/config --file build-kvm/.config --enable MPTCP_PM_ADVANCED
+	scripts/config --file build-kvm/.config --enable MPTCP_FULLMESH
+	scripts/config --file build-kvm/.config --enable MPTCP_NDIFFPORTS
+	scripts/config --file build-kvm/.config --enable MPTCP_BINDER
+	scripts/config --file build-kvm/.config --enable MPTCP_NETLINK
+	scripts/config --file build-kvm/.config --enable DEFAULT_FULLMESH
+	scripts/config --file build-kvm/.config --set-str DEFAULT_MPTCP_PM "fullmesh"
+	scripts/config --file build-kvm/.config --enable MPTCP_SCHED_ADVANCED
+	scripts/config --file build-kvm/.config --enable MPTCP_BLEST
+	scripts/config --file build-kvm/.config --enable MPTCP_ROUNDROBIN
+	scripts/config --file build-kvm/.config --enable MPTCP_REDUNDANT
+	scripts/config --file build-kvm/.config --enable DEFAULT_SCHEDULER
+	scripts/config --file build-kvm/.config --set-str DEFAULT_MPTCP_SCHED "default"
+
+	scripts/config --file build-kvm/.config --disable RETPOLINE
+
+	make O=build-kvm olddefconfig
+	make O=build-kvm -j 8
+	cd -
+}
+
+configure_host_tap() {
+	sudo ip tuntap add mode tap user $(whoami) name mptcp
+	sudo ip address add 6.6.6.1/24 dev mptcp
+	sudo ip l set dev mptcp up
+}
+
+clean_host_tap() {
+	sudo ip link del mptcp
+}
+
+ssh_vm() {
+	ssh -o "UserKnownHostsFile /dev/null" -o "StrictHostKeyChecking no" -p 6222 root@localhost $@
+}
+
+configure_guest_nw() {
+	ssh_vm ip addr add 6.6.6.2/24 dev enp0s4
+	ssh_vm ip link set dev enp0s4 up
+	ssh_vm ip route del default
+	ssh_vm ip route add default via 6.6.6.1
+}
+
+configure_host_nat() {
+	sudo iptables -t nat -A POSTROUTING -s 6.6.6.2/32 -j MASQUERADE
+	sudo iptables -A FORWARD -i mptcp -j ACCEPT
+	sudo iptables -A FORWARD -o mptcp -j ACCEPT
+}
+
+clean_host_nat() {
+	sudo iptables -t nat -D POSTROUTING -s 6.6.6.2/32 -j MASQUERADE
+	sudo iptables -D FORWARD -i mptcp -j ACCEPT
+	sudo iptables -D FORWARD -o mptcp -j ACCEPT
+}
+
+check_mptcp() {
+	# wget into an identity crisis obviously
+	ssh_vm wget -O- -U curl multipath-tcp.org 2>/dev/null
+}
+
+run_socks() {
+	echo "^C to kill it !"
+	ssh -o "UserKnownHostsFile /dev/null" -o "StrictHostKeyChecking no" -p 6222 -D 6666 -N  root@localhost
+}
+
+boot_vm() {
+	qemu-system-x86_64 -kernel ./mptcp/build-kvm/arch/x86/boot/bzImage -hda $IMG -append "root=/dev/sda rw console=ttyS0" --enable-kvm --nographic -device e1000,netdev=mgmt -device e1000,netdev=network0 -netdev tap,id=network0,ifname=mptcp,script=no,downscript=no -netdev user,id=mgmt,hostfwd=tcp:127.0.0.1:6222-:22
+}
