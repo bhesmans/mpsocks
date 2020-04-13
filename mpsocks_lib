@@ -86,6 +86,10 @@ ssh_vm() {
 	ssh -o "UserKnownHostsFile /dev/null" -o "StrictHostKeyChecking no" -p 6222 root@localhost $@
 }
 
+ssh_vm_pseudoterm() {
+	ssh -t -o "UserKnownHostsFile /dev/null" -o "StrictHostKeyChecking no" -p 6222 root@localhost $@
+}
+
 configure_guest_nw() {
 	ssh_vm ip addr add 6.6.6.2/24 dev enp0s4
 	ssh_vm ip link set dev enp0s4 up
@@ -110,11 +114,47 @@ check_mptcp() {
 	ssh_vm wget -O- -U curl multipath-tcp.org 2>/dev/null
 }
 
-run_socks() {
-	echo "^C to kill it !"
+run_ssh_socks() {
 	ssh -o "UserKnownHostsFile /dev/null" -o "StrictHostKeyChecking no" -p 6222 -D 6666 -N  root@localhost
 }
 
+run_socks() {
+	echo "^C to kill it !"
+	local method=${1:-ssh}
+	run_${method}_socks
+}
+
+install_dante() {
+	ssh_vm ip r del default
+	ssh_vm ip r add default via 10.0.2.2
+	ssh_vm apt-get install -y --allow-unauthenticated build-essential
+	ssh_vm mkdir tools
+	ssh_vm "wget -O- https://www.inet.no/dante/files/dante-1.4.2.tar.gz | tar -ixz --directory tools"
+	ssh_vm "cd tools/dante-1.4.2 && ./configure && make"
+}
+
+run_dante_socks() {
+	cat <<'EOF' | ssh_vm "cat - > /tmp/sockd.conf"
+logoutput: stderr
+
+internal: 6.6.6.2 port = 6666
+
+external: 6.6.6.2
+
+socksmethod: none
+
+client pass {
+        from: 6.6.6.0/24 port 1-65535 to: 0.0.0.0/0
+}
+
+socks pass {
+        from: 6.6.6.0/24 to: 0.0.0.0/0
+	        protocol: tcp udp
+}
+EOF
+	ssh_vm_pseudoterm tools/dante-1.4.2/sockd/sockd -f /tmp/sockd.conf
+}
+
 boot_vm() {
-	qemu-system-x86_64 -kernel ./mptcp/build-kvm/arch/x86/boot/bzImage -hda $IMG -append "root=/dev/sda rw console=ttyS0" --enable-kvm --nographic -device e1000,netdev=mgmt -device e1000,netdev=network0 -netdev tap,id=network0,ifname=mptcp,script=no,downscript=no -netdev user,id=mgmt,hostfwd=tcp:127.0.0.1:6222-:22
+	qemu-system-x86_64 -m 512 -kernel ./mptcp/build-kvm/arch/x86/boot/bzImage -hda $IMG -append "root=/dev/sda rw console=ttyS0" --enable-kvm --nographic -device e1000,netdev=mgmt -device e1000,netdev=network0 -netdev tap,id=network0,ifname=mptcp,script=no,downscript=no -netdev user,id=mgmt,hostfwd=tcp:127.0.0.1:6222-:22
 }

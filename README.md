@@ -4,7 +4,7 @@ This will create a new vm from scratch and build an mptcp kernel to run it.
 
 Usage:
 
-``` 
+```
 source mpsocks_lib
 
 # build a debian image base
@@ -23,6 +23,10 @@ configure_host_nat
 boot_vm
 
 # wait for the vm to boot, this should be fast and leave this open in a console
+# OPTIONNAL:
+# Install dante to use as a socks server.
+# https://www.inet.no/dante/
+# install_dante
 
 # Configure vm nw
 configure_guest_nw
@@ -32,10 +36,17 @@ check_mptcp
 # should print "Yay, you are MPTCP-capable! You can now rest in peace."
 
 # Enable local socks server
-run_sock
+run_socks
+# alternative without ssh : run_socks dante
 
-# You can now confiure firefox to use socks server localhost on port 6666
+# if you use ssh :
+# You can now configure firefox to use socks server localhost on port 6666
+# if you use dante :
+# You can now configure firefox to use socks server 6.6.6.2 on port 6666
 # Using firefox, go check http://amiusingmptcp.de/#check should be green
+
+# you should have less overhead with dante because it doesn't tunnel at all
+# Firefox will connect straight to the vm
 
 # Once you're done, do some clean up
 clean_host_nat
