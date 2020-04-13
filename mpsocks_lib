@@ -149,7 +149,7 @@ client pass {
 
 socks pass {
         from: 6.6.6.0/24 to: 0.0.0.0/0
-	        protocol: tcp udp
+        protocol: tcp udp
 }
 EOF
 	ssh_vm_pseudoterm tools/dante-1.4.2/sockd/sockd -f /tmp/sockd.conf
