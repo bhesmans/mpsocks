@@ -78,8 +78,18 @@ configure_host_tap() {
 	sudo ip l set dev mptcp up
 }
 
+configure_host_tap2() {
+	sudo ip tuntap add mode tap user $(whoami) name mptcp2
+	sudo ip address add 6.6.7.1/24 dev mptcp2
+	sudo ip l set dev mptcp2 up
+}
+
 clean_host_tap() {
 	sudo ip link del mptcp
+}
+
+clean_host_tap2() {
+	sudo ip link del mptcp2
 }
 
 ssh_vm() {
@@ -97,6 +107,13 @@ configure_guest_nw() {
 	ssh_vm ip route add default via 6.6.6.1
 }
 
+configure_guest_nw2() {
+	ssh_vm ip addr add 6.6.7.2/24 dev enp0s5
+	ssh_vm ip link set dev enp0s5 up
+	ssh_vm ip rule add from 6.6.7.2 table 666
+	ssh_vm ip route add default via 6.6.7.1 table 666
+}
+
 configure_host_nat() {
 	sudo iptables -t nat -A POSTROUTING -s 6.6.6.2/32 -j MASQUERADE
 	sudo iptables -A FORWARD -i mptcp -j ACCEPT
@@ -107,6 +124,30 @@ clean_host_nat() {
 	sudo iptables -t nat -D POSTROUTING -s 6.6.6.2/32 -j MASQUERADE
 	sudo iptables -D FORWARD -i mptcp -j ACCEPT
 	sudo iptables -D FORWARD -o mptcp -j ACCEPT
+}
+
+configure_host_nat2() {
+	sudo iptables -t nat -A POSTROUTING -s 6.6.7.2/32 -j MASQUERADE
+	sudo iptables -A FORWARD -i mptcp2 -j ACCEPT
+	sudo iptables -A FORWARD -o mptcp2 -j ACCEPT
+}
+
+clean_host_nat2() {
+	sudo iptables -t nat -D POSTROUTING -s 6.6.7.2/32 -j MASQUERADE
+	sudo iptables -D FORWARD -i mptcp2 -j ACCEPT
+	sudo iptables -D FORWARD -o mptcp2 -j ACCEPT
+}
+
+# $1 where to get out from src routing
+configure_host_source_routing() {
+	sudo ip rule add iif mptcp2 table 666
+	local gw=$(ip route | grep default | grep $1 | awk '{ print $3}')
+	sudo ip route add default via $gw table 666
+}
+
+clean_host_source_routing() {
+	sudo ip rule del iif mptcp2 table 666
+	sudo ip route del default table 666
 }
 
 check_mptcp() {
@@ -157,4 +198,8 @@ EOF
 
 boot_vm() {
 	qemu-system-x86_64 -m 512 -kernel ./mptcp/build-kvm/arch/x86/boot/bzImage -hda $IMG -append "root=/dev/sda rw console=ttyS0" --enable-kvm --nographic -device e1000,netdev=mgmt -device e1000,netdev=network0 -netdev tap,id=network0,ifname=mptcp,script=no,downscript=no -netdev user,id=mgmt,hostfwd=tcp:127.0.0.1:6222-:22
+}
+
+boot_vm2() {
+	qemu-system-x86_64 -m 512 -kernel ./mptcp/build-kvm/arch/x86/boot/bzImage -hda $IMG -append "root=/dev/sda rw console=ttyS0" --enable-kvm --nographic -device e1000,netdev=mgmt -device e1000,netdev=network0 -netdev tap,id=network0,ifname=mptcp,script=no,downscript=no -netdev user,id=mgmt,hostfwd=tcp:127.0.0.1:6222-:22 -device e1000,netdev=network1 -netdev tap,id=network1,ifname=mptcp2,script=no,downscript=no
 }

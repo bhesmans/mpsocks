@@ -53,3 +53,51 @@ clean_host_nat
 clean_host_tap
 ```
 
+Dvlp:
+
+Mptcp with one subflow is kind of sad. Let's configure a second itf.
+
+The first interface configured before is still there and use the default table.
+Second interface is configured with source routing. The second interface need
+to be configured in the call to configure\_host\_source\_routing (see bellow)
+
+In the example bellow, I used two interfaces on my laptop. My first interface
+is a tethering interface that use my smartphone to get out. My second interface
+is the wifi interface (wlp1s0).
+
+```
+# Same as the first one
+configure_host_tap2
+configure_host_nat2
+# Need source routing to get out from the second tap
+configure_host_source_routing wlp1s0 # replace itf by your outgoing itf
+
+configure_guest_nw2
+
+run_socks dante
+```
+
+You can check on http://amiusingmptcp.de the number of subflows, if everything
+went fine, you should have 2.
+
+Let's see a what's on the "wire".
+
+```
+sudo tcpdump -i wlp1s0 -s 120 -w /tmp/wlan.pcap &
+sudo tcpdump -i enp0s20f0u2 -s 120 -w /tmp/tether.pcap &
+# Go to http://amiusingmptcp.de for a small speedtest.
+sudo killall tcpdump
+cd /tmp
+mergecap -w all.pcap wlan.pcap tether.pcap
+mptcptrace -f all.pcap -s # Output
+# MPTCP trace V0.0 alpha : says Hello.
+# MPTCP connection 0 with id 1
+#        Subflow 0 with wscale : 6 7 IPv4 sport 58865 dport 80 saddr 192.168.1.21 daddr 18.194.8.156
+#        Subflow 1 with wscale : 6 7 IPv4 sport 49694 dport 80 saddr 192.168.42.204 daddr 18.194.8.156
+#MPTCP connection 0 with id 2
+#        Subflow 0 with wscale : 6 7 IPv4 sport 57563 dport 80 saddr 192.168.1.21 daddr 18.194.8.156
+#        Subflow 1 with wscale : 6 7 IPv4 sport 49696 dport 80 saddr 192.168.42.204 daddr 18.194.8.156
+xplot.org s2c_seq_1.xpl # see img bellow
+```
+
+![MPTCP DSS](/img/test1.png?raw=true "MPTCP DSS")
