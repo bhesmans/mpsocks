@@ -185,6 +185,11 @@ configure_host_source_routing() {
 	local tap=$(tap_name $n)
 	local table=$(guest_table $n)
 
+	# Do not configure source routing for the first itf
+	if [ "$n" = 0 ]; then
+		return
+	fi
+
 	sudo ip rule add iif $tap table $table
 
 	local gw=$(ip route | grep default | grep $itf | awk '{ print $3}')
@@ -192,9 +197,13 @@ configure_host_source_routing() {
 }
 
 clean_host_source_routing() {
-	local n=${2:-1}
+	local n=${1:-1}
 	local tap=$(tap_name $n)
 	local table=$(guest_table $n)
+
+	if [ "$n" = 0 ]; then
+		return
+	fi
 
 	sudo ip rule del iif $tap table $table
 	sudo ip route del default table $table
@@ -210,7 +219,7 @@ run_ssh_socks() {
 }
 
 run_socks() {
-	echo "^C to kill it !"
+	echo "Starting ^C to kill it !"
 	local method=${1:-ssh}
 	run_${method}_socks
 }
@@ -258,5 +267,47 @@ qemu_vm_netdev() {
 
 boot_vm() {
 	local n=${1:-1}
-	qemu-system-x86_64 -m 512 -kernel ./mptcp/build-kvm/arch/x86/boot/bzImage -hda $IMG -append "root=/dev/sda rw console=ttyS0" --enable-kvm --nographic -device e1000,netdev=mgmt -netdev user,id=mgmt,hostfwd=tcp:127.0.0.1:6222-:22 $(qemu_vm_netdev $n)
+	local quiet=${2:-no}
+	local display
+
+	if [ $quiet = "yes" ]; then
+		display="-display none"
+	else
+		display="-nographic"
+	fi
+
+	qemu-system-x86_64 -m 512 -kernel ./mptcp/build-kvm/arch/x86/boot/bzImage -hda $IMG -append "root=/dev/sda rw console=ttyS0" --enable-kvm $display -device e1000,netdev=mgmt -netdev user,id=mgmt,hostfwd=tcp:127.0.0.1:6222-:22 $(qemu_vm_netdev $n)
+}
+
+# $1: comma-separated list of interface to use
+boot_socks() {
+	local itfs=${1?First params is comma-separated list of interface}
+	local itfa=($(echo ${itfs} | tr ',' ' '))
+	local n=${#itfa[@]}
+	local maxidx=$((n - 1))
+	local i
+
+	for i in $(seq 0 $maxidx); do
+		configure_host_tap $i
+		configure_host_nat $i
+		configure_host_source_routing ${itfa[$i]} $i
+	done
+
+	boot_vm $n yes &
+
+	sleep 5
+
+	for i in $(seq 0 $maxidx); do
+		configure_guest_nw $i
+	done
+
+	run_socks dante
+
+	ssh_vm shutdown -h now
+
+	for i in $(seq 0 $maxidx); do
+		clean_host_tap $i
+		clean_host_nat $i
+		clean_host_source_routing $i
+	done
 }

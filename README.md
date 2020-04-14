@@ -2,7 +2,9 @@ Simple sock test with mptcp
 
 This will create a new vm from scratch and build an mptcp kernel to run it.
 
-Usage:
+## Quick start:
+
+### Build vm (First time only)
 
 ```
 source mpsocks_lib
@@ -13,6 +15,31 @@ build_image
 # build mptcp kernel
 build_kernel
 
+# install dante sock server (https://www.inet.no/dante/)
+# boot vm and compile dante inside the vm then shut it down
+boot_vm 0 yes &
+sleep 5 # Let qemu open the fwd port for ssh
+install_dante
+ssh_vm shutdown -h now
+```
+
+### Run a socks server on the vm
+
+```
+# Comma-separated list of interface to use for mptcp subflows
+# Could be the same if your system does not have multiple itf
+boot_socks wlp1s0,wlp1s0,wlp1s0
+
+# Configure your app to use 10.66.6.2 as a sock proxy
+# ^C to finish the socks server and the vm.
+```
+
+## More detailed steps ...:
+
+The process can be split is smaller tasks to understand what's going on and
+do it step by step.
+
+```
 # Create tap for nw
 configure_host_tap
 
@@ -42,7 +69,7 @@ run_socks
 # if you use ssh :
 # You can now configure firefox to use socks server localhost on port 6666
 # if you use dante :
-# You can now configure firefox to use socks server 6.6.6.2 on port 6666
+# You can now configure firefox to use socks server 10.66.6.2 on port 6666
 # Using firefox, go check http://amiusingmptcp.de/#check should be green
 
 # you should have less overhead with dante because it doesn't tunnel at all
@@ -67,12 +94,12 @@ is the wifi interface (wlp1s0).
 
 ```
 # Same as the first one
-configure_host_tap2
-configure_host_nat2
+configure_host_tap 1
+configure_host_nat 1
 # Need source routing to get out from the second tap
 configure_host_source_routing wlp1s0 # replace itf by your outgoing itf
 
-configure_guest_nw2
+configure_guest_nw 1
 
 run_socks dante
 ```
