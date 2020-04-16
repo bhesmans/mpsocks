@@ -215,3 +215,67 @@ acceptable because the connection will be terminated earlier by an intermediate
 hop and a new SYN with a new initial TTL will be generated.  Since here I'm
 testing on a 4G connection I would bet on some kind of network optimizer that is
 not capable of handling MPTCP correctly.
+
+At this point we've guest that MTPCP option in the SYN is probably the only
+thing that our ISP is lookin at, so it does not matter if the server actually
+speaks MPTCP or not. Let's try to talk to a server that is not mptcp enabled and
+see if there is a difference if we use the MPTCP option in the SYN or not :
+
+(traces are available in the trace directory)
+
+```
+root@bhesmans-Precision-7520:~# sysctl net.mptcp.mptcp_enabled=1
+net.mptcp.mptcp_enabled = 1
+root@bhesmans-Precision-7520:~# wget -O /dev/null -U curl --bind-address 10.66.7.2 http://ipv4.download1.thinkbroadband.com/100MB.zip
+--2020-04-16 11:30:02--  http://ipv4.download1.thinkbroadband.com/100MB.zip
+Resolving ipv4.download1.thinkbroadband.com (ipv4.download1.thinkbroadband.com)... 80.249.99.148
+Connecting to ipv4.download1.thinkbroadband.com (ipv4.download1.thinkbroadband.com)|80.249.99.148|:80... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 104857600 (100M) [application/zip]
+Saving to: '/dev/null'
+
+/dev/null                  100%[=====================================>] 100.00M  4.78MB/s    in 33s
+
+2020-04-16 11:30:36 (3.00 MB/s) - '/dev/null' saved [104857600/104857600]
+```
+
+```
+root@bhesmans-Precision-7520:~# sysctl net.mptcp.mptcp_enabled=0
+net.mptcp.mptcp_enabled = 0
+root@bhesmans-Precision-7520:~# wget -O /dev/null -U curl --bind-address 10.66.7.2 http://ipv4.download1.thinkbroadband.com/100MB.zip
+--2020-04-16 11:31:00--  http://ipv4.download1.thinkbroadband.com/100MB.zip
+Resolving ipv4.download1.thinkbroadband.com (ipv4.download1.thinkbroadband.com)... 80.249.99.148
+Connecting to ipv4.download1.thinkbroadband.com (ipv4.download1.thinkbroadband.com)|80.249.99.148|:80... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 104857600 (100M) [application/zip]
+Saving to: '/dev/null'
+
+/dev/null                  100%[=====================================>] 100.00M  8.66MB/s    in 12s
+
+2020-04-16 11:31:12 (8.56 MB/s) - '/dev/null' saved [104857600/104857600]
+```
+
+redoing our TTL check:
+
+```
+$ tshark -Y 'tcp.flags.syn == 1' -T fields -e tcp.flags.syn -e tcp.flags.ack -e
+ip.ttl -E header=yes -r traces/net_neutrality/mptcp_100MB
+tcp.flags.syn   tcp.flags.ack   ip.ttl
+1       0       63
+1       1       49
+$ tshark -Y 'tcp.flags.syn == 1' -T fields -e tcp.flags.syn -e tcp.flags.ack -e
+ip.ttl -E header=yes -r traces/net_neutrality/nomptcp_100MB
+tcp.flags.syn   tcp.flags.ack   ip.ttl
+1       0       63
+1       1       124
+
+```
+
+We also note a difference in speed :/ I did a few tests and it seems that it was
+consistently slower when MPTCP is present in the SYN.
+
+(This might be a good time to call the net neutrality police.)
+
+There is a possible consequence for all the devices that use MPTCP.
+Because they seem to be treated differently. In particular some Apple devices
+are known to use MPTCP for some of their services.
