@@ -18,7 +18,7 @@ build_kernel
 # install dante sock server (https://www.inet.no/dante/)
 # boot vm and compile dante inside the vm then shut it down
 boot_vm 0 yes &
-sleep 5 # Let qemu open the fwd port for ssh
+wait_vm_ssh
 install_dante
 ssh_vm shutdown -h now
 ```

@@ -279,6 +279,15 @@ boot_vm() {
 	qemu-system-x86_64 -m 512 -kernel ./mptcp/build-kvm/arch/x86/boot/bzImage -hda $IMG -append "root=/dev/sda rw console=ttyS0" --enable-kvm $display -device e1000,netdev=mgmt -netdev user,id=mgmt,hostfwd=tcp:127.0.0.1:6222-:22 $(qemu_vm_netdev $n)
 }
 
+wait_vm_ssh() {
+	echo -n "Waiting for ssh's vm to be ready..."
+
+	while ! ssh_vm echo "Ready!" 2>/dev/null ; do
+		echo -n ".";
+		sleep 1;
+	done
+}
+
 # $1: comma-separated list of interface to use
 boot_socks() {
 	local itfs=${1?First params is comma-separated list of interface}
@@ -295,7 +304,7 @@ boot_socks() {
 
 	boot_vm $n yes &
 
-	sleep 5
+	wait_vm_ssh
 
 	for i in $(seq 0 $maxidx); do
 		configure_guest_nw $i
