@@ -106,6 +106,9 @@ build_kernel() {
 
 	scripts/config --file build-kvm/.config --disable RETPOLINE
 
+	scripts/config --file build-kvm/.config --enable NETFILTER_ADVANCED
+	scripts/config --file build-kvm/.config --module IP_NF_TARGET_REDIRECT
+
 	make O=build-kvm olddefconfig
 	make O=build-kvm -j 8
 	cd -
