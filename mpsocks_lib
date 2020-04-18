@@ -109,6 +109,15 @@ build_kernel() {
 	make O=build-kvm olddefconfig
 	make O=build-kvm -j 8
 	cd -
+
+	build_kernel_modules
+}
+
+build_kernel_modules() {
+	cd mptcp
+	make O=build-kvm -j 8 modules
+	make O=build-kvm INSTALL_MOD_PATH=$PWD/build-kvm/mymodules/ -j 8 modules_install
+	cd -
 }
 
 tap_name() {
@@ -276,7 +285,8 @@ boot_vm() {
 		display="-nographic"
 	fi
 
-	qemu-system-x86_64 -m 512 -kernel ./mptcp/build-kvm/arch/x86/boot/bzImage -hda $IMG -append "root=/dev/sda rw console=ttyS0" --enable-kvm $display -device e1000,netdev=mgmt -netdev user,id=mgmt,hostfwd=tcp:127.0.0.1:6222-:22 $(qemu_vm_netdev $n)
+	qemu-system-x86_64 -m 512 -kernel ./mptcp/build-kvm/arch/x86/boot/bzImage -hda $IMG -append "root=/dev/sda rw console=ttyS0" --enable-kvm $display -device e1000,netdev=mgmt -netdev user,id=mgmt,hostfwd=tcp:127.0.0.1:6222-:22 $(qemu_vm_netdev $n) \
+		-fsdev local,security_model=mapped-xattr,id=fsdev0,path=$PWD/mptcp/build-kvm/mymodules/lib/modules,readonly -device virtio-9p-pci,id=fs0,fsdev=fsdev0,mount_tag=modules
 }
 
 wait_vm_ssh() {
@@ -286,6 +296,11 @@ wait_vm_ssh() {
 		echo -n ".";
 		sleep 1;
 	done
+}
+
+mount_vm_modules() {
+	ssh_vm mkdir -p /lib/modules
+	ssh_vm mount -t 9p -o trans=virtio,version=9p2000.L modules /lib/modules
 }
 
 # $1: comma-separated list of interface to use
@@ -305,6 +320,8 @@ boot_socks() {
 	boot_vm $n yes &
 
 	wait_vm_ssh
+
+	mount_vm_modules
 
 	for i in $(seq 0 $maxidx); do
 		configure_guest_nw $i
