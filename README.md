@@ -41,6 +41,8 @@ wget -4 -O- -U curl -q multipath-tcp.org
 
 ## Bonus
 
+### Observations
+
 The internet is sometimes funny.
 
 From the vms i tested the following scenarii, traces are present in
@@ -49,50 +51,50 @@ From the vms i tested the following scenarii, traces are present in
 * mptcp off / ttl = 10
   * Commands
 
-```
-# sysctl net.mptcp.mptcp_enabled=0
-net.mptcp.mptcp_enabled = 0
-# sysctl net.ipv4.ip_default_ttl=10
-net.ipv4.ip_default_ttl = 10
-# wget -O- -U curl -q --bind-address 10.66.7.2 multipath-tcp.org
-Nay, Nay, Nay, your have an old computer that does not speak MPTCP. Shame on you!
-```
+    ```
+    # sysctl net.mptcp.mptcp_enabled=0
+    net.mptcp.mptcp_enabled = 0
+    # sysctl net.ipv4.ip_default_ttl=10
+    net.ipv4.ip_default_ttl = 10
+    # wget -O- -U curl -q --bind-address 10.66.7.2 multipath-tcp.org
+    Nay, Nay, Nay, your have an old computer that does not speak MPTCP. Shame on you!
+    ```
 
   * Observations
 
-Even using a low ttl we are able to join the server.
+    Even using a low ttl we are able to join the server.
 
 * mptcp on / ttl = 10
-```
-# sysctl net.mptcp.mptcp_enabled=1
-net.mptcp.mptcp_enabled = 1
-# sysctl net.ipv4.ip_default_ttl=10
-net.ipv4.ip_default_ttl = 10
-# wget -O- -U curl -q --bind-address 10.66.7.2 multipath-tcp.org
-^C
-```
+    ```
+    # sysctl net.mptcp.mptcp_enabled=1
+    net.mptcp.mptcp_enabled = 1
+    # sysctl net.ipv4.ip_default_ttl=10
+    net.ipv4.ip_default_ttl = 10
+    # wget -O- -U curl -q --bind-address 10.66.7.2 multipath-tcp.org
+    ^C
+    ```
 
   * Observations
 
-Using the same low TTL but with mptcp enabled, we can't reach it anymore :-/
+    Using the same low TTL but with mptcp enabled, we can't reach it anymore :-/
 
 * mptcp on / ttl = 64
 
-```
-# sysctl net.mptcp.mptcp_enabled=1
-net.mptcp.mptcp_enabled = 1
-# sysctl net.ipv4.ip_default_ttl=64
-net.ipv4.ip_default_ttl = 64
-# wget -O- -U curl -q --bind-address 10.66.7.2 multipath-tcp.org
-Yay, you are MPTCP-capable! You can now rest in peace.
-```
+    ```
+    # sysctl net.mptcp.mptcp_enabled=1
+    net.mptcp.mptcp_enabled = 1
+    # sysctl net.ipv4.ip_default_ttl=64
+    net.ipv4.ip_default_ttl = 64
+    # wget -O- -U curl -q --bind-address 10.66.7.2 multipath-tcp.org
+    Yay, you are MPTCP-capable! You can now rest in peace.
+    ```
 
   * Observations
 
-Using a high enough TTL we can reach it again using mptcp and the server
-confirms the usage of MTPCP.
+    Using a high enough TTL we can reach it again using mptcp and the server
+    confirms the usage of MTPCP.
 
-* Analysis desk:
+### Analysis:
 
 Let's focus on TTL (Thanks Yves Vanaubel for the idea! https://dl.acm.org/doi/abs/10.1145/2504730.2504761 )
 
