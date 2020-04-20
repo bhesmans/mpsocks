@@ -16,11 +16,9 @@ build_image
 build_kernel
 
 # install dante sock server (https://www.inet.no/dante/)
-# boot vm and compile dante inside the vm then shut it down
-boot_vm 0 yes &
-wait_vm_ssh
-install_dante
-ssh_vm shutdown -h now
+# install redsock server (https://darkk.net.ru/redsocks/)
+# boot vm and dl/compile dante/redsocks inside the vm then shut it down
+install_vm_extra
 ```
 
 ### Run a socks server on the vm

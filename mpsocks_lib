@@ -232,13 +232,25 @@ run_socks() {
 	run_${method}_socks
 }
 
+install_vm_extra() {
+	boot_vm 0 yes 2>/dev/null &
+	wait_vm_ssh
+	ssh_vm mkdir -p tools
+	install_dante
+	install_redsocks
+	ssh_vm shutdown -h now
+}
+
 install_dante() {
-	ssh_vm ip r del default
-	ssh_vm ip r add default via 10.0.2.2
 	ssh_vm apt-get install -y --allow-unauthenticated build-essential
-	ssh_vm mkdir tools
 	ssh_vm "wget -O- https://www.inet.no/dante/files/dante-1.4.2.tar.gz | tar -ixz --directory tools"
 	ssh_vm "cd tools/dante-1.4.2 && ./configure && make"
+}
+
+install_redsocks() {
+	ssh_vm apt-get install -y --allow-unauthenticated libevent-2.0-5 libevent-core-2.0-5 libevent-dev
+	ssh_vm "wget -O- https://github.com/darkk/redsocks/archive/release-0.5.tar.gz | tar ixz --directory tools"
+	ssh_vm "cd tools/redsocks-release-0.5 && make"
 }
 
 run_dante_socks() {
