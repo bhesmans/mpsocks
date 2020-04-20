@@ -1,6 +1,14 @@
-Simple sock test with mptcp
+# What?
 
-This will create a new vm from scratch and build an mptcp kernel to run it.
+Enjoy MPTCP capabilities without an MPTCP kernel on the client side.
+
+## How?
+
+* Build an MPTCP kernel from sources
+* Build a basic image to run with the kernel (debian debootsrap)
+* Build and install socks related tools in the vm (dante + redsocks)
+* Configure networking for MPTCP (guest + host) to use physical interfaces from the guest
+
 
 ## Quick start:
 
