@@ -65,6 +65,8 @@ From the vms i tested the following scenarii, traces are present in
     Even using a low ttl we are able to join the server.
 
 * mptcp on / ttl = 10
+  * Commands
+
     ```
     # sysctl net.mptcp.mptcp_enabled=1
     net.mptcp.mptcp_enabled = 1
@@ -79,6 +81,7 @@ From the vms i tested the following scenarii, traces are present in
     Using the same low TTL but with mptcp enabled, we can't reach it anymore :-/
 
 * mptcp on / ttl = 64
+  * Commands
 
     ```
     # sysctl net.mptcp.mptcp_enabled=1
