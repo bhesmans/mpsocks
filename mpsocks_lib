@@ -163,6 +163,11 @@ guest_table() {
 	fi
 }
 
+host_table() {
+	local n=${1:-0}
+	echo $(($TABLESTART + $n))
+}
+
 configure_guest_nw() {
 	local n=${1:-0}
 	local itf=$(guest_itf $n)
@@ -195,12 +200,7 @@ configure_host_source_routing() {
 	local itf=${1?Which itf should I use to go out ???}
 	local n=${2:-1}
 	local tap=$(tap_name $n)
-	local table=$(guest_table $n)
-
-	# Do not configure source routing for the first itf
-	if [ "$n" = 0 ]; then
-		return
-	fi
+	local table=$(host_table $n)
 
 	sudo ip rule add iif $tap table $table
 
@@ -211,11 +211,7 @@ configure_host_source_routing() {
 clean_host_source_routing() {
 	local n=${1:-1}
 	local tap=$(tap_name $n)
-	local table=$(guest_table $n)
-
-	if [ "$n" = 0 ]; then
-		return
-	fi
+	local table=$(host_table $n)
 
 	sudo ip rule del iif $tap table $table
 	sudo ip route del default table $table
