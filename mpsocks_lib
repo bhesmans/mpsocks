@@ -275,6 +275,63 @@ EOF
 	ssh_vm_pseudoterm tools/dante-1.4.2/sockd/sockd -f /tmp/sockd.conf
 }
 
+run_redsocks() {
+	cat <<EOF | ssh_vm "cat - > /tmp/redsocks.conf"
+base {
+        // debug: connection progress
+        log_debug = off;
+
+        // info: start and end of client session
+        log_info = on;
+
+        log = stderr;
+
+        // detach from console
+        daemon = on;
+
+        redirector = iptables;
+
+}
+
+redsocks {
+        /* 'local_ip' defaults to 127.0.0.1 for security reasons,
+         * use 0.0.0.0 if you want to listen on every interface.
+         * 'local_*' are used as port to redirect to.
+         */
+        local_ip = 0.0.0.0;
+        local_port = 12345;
+
+        // 'ip' and 'port' are IP and tcp-port of proxy-server
+        // You can also use hostname instead of IP, only one (random)
+        // address of multihomed host will be used.
+        ip = $(guest_ip);
+        port = $SOCK_PORT;
+
+        // known types: socks4, socks5, http-connect, http-relay
+        type = socks5;
+
+}
+EOF
+
+	ssh_vm iptables -t nat -N REDSOCKS
+
+	# ssh_vm iptables -t nat -A REDSOCKS -d 0.0.0.0/8 -j RETURN
+	ssh_vm iptables -t nat -A REDSOCKS -d 10.0.0.0/8 -j RETURN
+	# ssh_vm iptables -t nat -A REDSOCKS -d 127.0.0.0/8 -j RETURN
+	# ssh_vm iptables -t nat -A REDSOCKS -d 169.254.0.0/16 -j RETURN
+	# ssh_vm iptables -t nat -A REDSOCKS -d 172.16.0.0/12 -j RETURN
+	# ssh_vm iptables -t nat -A REDSOCKS -d 192.168.0.0/16 -j RETURN
+	# ssh_vm iptables -t nat -A REDSOCKS -d 224.0.0.0/4 -j RETURN
+	# ssh_vm iptables -t nat -A REDSOCKS -d 240.0.0.0/4 -j RETURN
+
+	ssh_vm iptables -t nat -A REDSOCKS -p tcp -j REDIRECT --to-ports 12345
+
+	ssh_vm iptables -t nat -A PREROUTING --in-interface $(guest_itf) -p tcp -j REDSOCKS
+
+	ssh_vm tools/redsocks-release-0.5/redsocks -c /tmp/redsocks.conf
+
+}
+
 qemu_vm_netdev() {
 	local n=${1:-1}
 	local i
@@ -338,6 +395,7 @@ boot_socks() {
 		configure_guest_nw $i
 	done
 
+	run_redsocks
 	run_socks dante
 
 	ssh_vm shutdown -h now

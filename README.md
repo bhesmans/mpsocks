@@ -30,6 +30,13 @@ boot_socks wlp1s0,wlp1s0,wlp1s0
 
 # Configure your app to use 10.66.6.2 as a sock proxy
 # ^C to finish the socks server and the vm.
+
+# If you don't have an option to add a socks proxy on your application, the vm
+# runs a "socksifier", you just need to route traffic through the vm and it will
+# be "socksified"
+sudo ip route add 130.104.228.140 via 10.66.6.2 # multipath-tcp.org
+wget -4 -O- -U curl -q multipath-tcp.org
+# Yay, you are MPTCP-capable! You can now rest in peace.
 ```
 
 ## More detailed steps ...:
